@@ -62,65 +62,109 @@ export const calculateDateRange = (data: DataPoint[]): { days: number; startDate
   const endDate = new Date(Math.max(...dates.map(d => d.getTime())));
   
   const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-  const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // Add 1 to include both start and end dates
+  const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
   return { days, startDate, endDate };
 };
 
 export const parseCSV = (csv: string): DataPoint[] => {
-  const processedData: Record<string, DataPoint> = {};
+  try {
+    // Remove any BOM and normalize line endings
+    const cleanedCsv = csv.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+    
+    // Split into lines and clean each line
+    const lines = cleanedCsv.split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'));
+    
+    if (lines.length === 0) {
+      console.error('No valid lines found in CSV');
+      return [];
+    }
 
-  const lines = csv.split('\n')
-    .map(line => line.trim())
-    .filter(line => !line.startsWith('#')); // Only filter comments, allow empty first column
+    // Parse headers
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    
+    // Find column indices
+    const dateIndex = headers.findIndex(h => h === 'download_date');
+    const countryIndex = headers.findIndex(h => h === 'country');
+    const versionIndex = headers.findIndex(h => h === 'package_version');
+    const downloadsIndex = headers.findIndex(h => h === 'download_count');
 
-  // Find the header line and get column indices
-  const headers = lines[0].split(',');
-  const dateIndex = headers.indexOf('download_date');
-  const countryIndex = headers.indexOf('country');
-  const versionIndex = headers.indexOf('package_version');
-  const downloadsIndex = headers.indexOf('download_count');
+    if (dateIndex === -1 || countryIndex === -1 || versionIndex === -1 || downloadsIndex === -1) {
+      console.error('Required columns not found:', {
+        headers,
+        dateIndex,
+        countryIndex,
+        versionIndex,
+        downloadsIndex
+      });
+      return [];
+    }
 
-  if (dateIndex === -1 || countryIndex === -1 || versionIndex === -1 || downloadsIndex === -1) {
-    console.error('Required columns not found in CSV:', headers);
+    const data: DataPoint[] = [];
+    let errorCount = 0;
+
+    // Process each line
+    for (let i = 1; i < lines.length; i++) {
+      try {
+        const line = lines[i];
+        if (!line) continue;
+
+        // Split the line and ensure we have all columns
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length <= Math.max(dateIndex, countryIndex, versionIndex, downloadsIndex)) {
+          errorCount++;
+          continue;
+        }
+
+        const downloads = parseInt(parts[downloadsIndex], 10);
+        if (isNaN(downloads)) {
+          errorCount++;
+          continue;
+        }
+
+        const date = parts[dateIndex];
+        if (!date || !Date.parse(date)) {
+          errorCount++;
+          continue;
+        }
+
+        data.push({
+          date: date,
+          country: parts[countryIndex],
+          version: parts[versionIndex],
+          downloads: downloads
+        });
+      } catch (lineError) {
+        errorCount++;
+        console.warn(`Error processing line ${i}:`, lineError);
+      }
+    }
+
+    if (errorCount > 0) {
+      console.warn(`Encountered ${errorCount} errors while parsing CSV`);
+    }
+
+    if (data.length === 0) {
+      console.error('No valid data points were parsed from CSV');
+      return [];
+    }
+
+    console.log(`Successfully parsed ${data.length} records`);
+    
+    // Sort by date and return
+    return data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  } catch (error) {
+    console.error('Fatal error parsing CSV:', error);
     return [];
   }
-
-  // Process data lines
-  lines.slice(1).forEach(line => {
-    const parts = line.split(',').map(part => part.trim());
-    if (parts.length > Math.max(dateIndex, countryIndex, versionIndex, downloadsIndex)) {
-      const date = parts[dateIndex];
-      const version = parts[versionIndex];
-      const downloads = parseInt(parts[downloadsIndex], 10) || 0;
-      const country = parts[countryIndex];
-
-      // Create a unique key for date+version combination
-      const key = `${date}-${version}-${country}`;
-      
-      if (!processedData[key]) {
-        processedData[key] = {
-          date,
-          version,
-          downloads: 0,
-          country
-        };
-      }
-      
-      // Sum downloads across countries for the same date and version
-      processedData[key].downloads += downloads;
-    }
-  });
-
-  return Object.values(processedData)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 };
 
 export const calculateStats = (data: DataPoint[]): Stats => {
   const downloadsByVersion: Record<string, number> = {};
   let totalDownloads = 0;
 
-  // Group downloads by version
   data.forEach(point => {
     if (!downloadsByVersion[point.version]) {
       downloadsByVersion[point.version] = 0;
@@ -133,7 +177,6 @@ export const calculateStats = (data: DataPoint[]): Stats => {
     ? Math.round(totalDownloads / Object.keys(downloadsByVersion).length)
     : 0;
 
-  // Sort versions by version number to get the latest
   const versions = Object.keys(downloadsByVersion).sort((a, b) => {
     const aParts = a.split('.').map(Number);
     const bParts = b.split('.').map(Number);
