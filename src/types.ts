@@ -17,6 +17,13 @@ export interface CountryData {
   downloads: number;
 }
 
+export interface GitterStats {
+  post_cnt: number;
+  unique_users_with_posts: number;
+  avg_posts_per_user: number;
+  date: string;
+}
+
 export interface GithubStats {
   post_cnt: number;
   comment_cnt: number;
@@ -24,9 +31,7 @@ export interface GithubStats {
   date: string;
 }
 
-export interface GitterStats {
-  post_cnt: number;
-  unique_users_with_posts: number;
-  avg_posts_per_user: number;
+export interface CommitStats {
+  [key: string]: number;
   date: string;
 }

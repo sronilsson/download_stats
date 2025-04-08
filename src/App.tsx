@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Download, Tag, Globe2, LineChart, Link, Github, FileText, Package, BookOpen, MessageSquare, FileCode, Youtube, User, Menu, X, Clock, MessagesSquare, Users } from 'lucide-react';
+import { Download, Tag, Globe2, LineChart, Link, Github, FileText, Package, BookOpen, FileCode, Youtube, User, Menu, X, MessageSquare, Users, Calendar } from 'lucide-react';
 import { parseCSV, calculateStats, calculateDateRange } from './utils';
-import { DataPoint, Stats, GithubStats, GitterStats } from './types';
+import { DataPoint, Stats, GitterStats, GithubStats, CommitStats } from './types';
 import { StatsCard } from './components/StatsCard';
 import { DailyDownloadsChart } from './components/DailyDownloadsChart';
 import { CountryDownloadsChart } from './components/CountryDownloadsChart';
+import { CommitChart } from './components/CommitChart';
 
 function App() {
   const [data, setData] = useState<DataPoint[]>([]);
@@ -16,8 +17,9 @@ function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [recent48hDownloads, setRecent48hDownloads] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [githubStats, setGithubStats] = useState<GithubStats | null>(null);
   const [gitterStats, setGitterStats] = useState<GitterStats | null>(null);
+  const [githubStats, setGithubStats] = useState<GithubStats | null>(null);
+  const [commitStats, setCommitStats] = useState<CommitStats | null>(null);
 
   const fetchWithRetry = async (url: string, retries = 3, delay = 2000): Promise<Response> => {
     try {
@@ -38,22 +40,25 @@ function App() {
 
   const fetchData = async () => {
     try {
-      const [downloadResponse, githubResponse, gitterResponse] = await Promise.all([
+      const [downloadResponse, gitterResponse, githubResponse, commitResponse] = await Promise.all([
         fetchWithRetry('https://raw.githubusercontent.com/sgoldenlab/simba/download_stats/misc/bigquery_download_stats.csv'),
+        fetchWithRetry('https://raw.githubusercontent.com/sgoldenlab/simba/download_stats/misc/gitter_chat_stats.json'),
         fetchWithRetry('https://raw.githubusercontent.com/sgoldenlab/simba/download_stats/misc/github_issues_summary.json'),
-        fetchWithRetry('https://raw.githubusercontent.com/sgoldenlab/simba/download_stats/misc/gitter_chat_stats.json')
+        fetchWithRetry('https://raw.githubusercontent.com/sgoldenlab/simba/download_stats/misc/simba_commit_counts.json')
       ]);
 
-      const [downloadText, githubJson, gitterJson] = await Promise.all([
+      const [downloadText, gitterJson, githubJson, commitJson] = await Promise.all([
         downloadResponse.text(),
+        gitterResponse.json(),
         githubResponse.json(),
-        gitterResponse.json()
+        commitResponse.json()
       ]);
 
       const parsedData = parseCSV(downloadText);
       setData(parsedData);
-      setGithubStats(githubJson);
       setGitterStats(gitterJson);
+      setGithubStats(githubJson);
+      setCommitStats(commitJson);
       
       const calculatedStats = calculateStats(parsedData);
       setStats(calculatedStats);
@@ -112,81 +117,76 @@ function App() {
 
   const renderNavigation = () => (
     <nav className="flex flex-col space-y-2">
-      <div className="space-y-2">
-        <button
-          onClick={() => {
-            setActiveTab('overview');
-            setIsMobileMenuOpen(false);
-          }}
-          className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-            activeTab === 'overview'
-              ? 'bg-white/10 text-white'
-              : 'text-gray-400 hover:bg-white/5'
-          }`}
-        >
-          <LineChart size={18} />
-          <span>Overview</span>
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab('biweekly');
-            setIsMobileMenuOpen(false);
-          }}
-          className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-            activeTab === 'biweekly'
-              ? 'bg-white/10 text-white'
-              : 'text-gray-400 hover:bg-white/5'
-          }`}
-        >
-          <LineChart size={18} />
-          <span>Bi-weekly Stats</span>
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab('countries');
-            setIsMobileMenuOpen(false);
-          }}
-          className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-            activeTab === 'countries'
-              ? 'bg-white/10 text-white'
-              : 'text-gray-400 hover:bg-white/5'
-          }`}
-        >
-          <Globe2 size={18} />
-          <span>Countries</span>
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab('community');
-            setIsMobileMenuOpen(false);
-          }}
-          className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-            activeTab === 'community'
-              ? 'bg-white/10 text-white'
-              : 'text-gray-400 hover:bg-white/5'
-          }`}
-        >
-          <Users size={18} />
-          <span>Community</span>
-        </button>
-      </div>
-      
-      <div className="border-t border-white/10 my-2 pt-2">
-        <button
-          onClick={() => {
-            setActiveTab('links');
-            setIsMobileMenuOpen(false);
-          }}
-          className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-            activeTab === 'links'
-              ? 'bg-white/10 text-white'
-              : 'text-gray-400 hover:bg-white/5'
-          }`}
-        >
-          <Link size={18} />
-          <span>Links</span>
-        </button>
-      </div>
+      <button
+        onClick={() => {
+          setActiveTab('overview');
+          setIsMobileMenuOpen(false);
+        }}
+        className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+          activeTab === 'overview'
+            ? 'bg-white/10 text-white'
+            : 'text-gray-400 hover:bg-white/5'
+        }`}
+      >
+        <LineChart size={18} />
+        <span>Overview</span>
+      </button>
+      <button
+        onClick={() => {
+          setActiveTab('biweekly');
+          setIsMobileMenuOpen(false);
+        }}
+        className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+          activeTab === 'biweekly'
+            ? 'bg-white/10 text-white'
+            : 'text-gray-400 hover:bg-white/5'
+        }`}
+      >
+        <LineChart size={18} />
+        <span>Bi-weekly Stats</span>
+      </button>
+      <button
+        onClick={() => {
+          setActiveTab('countries');
+          setIsMobileMenuOpen(false);
+        }}
+        className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+          activeTab === 'countries'
+            ? 'bg-white/10 text-white'
+            : 'text-gray-400 hover:bg-white/5'
+        }`}
+      >
+        <Globe2 size={18} />
+        <span>Countries</span>
+      </button>
+      <button
+        onClick={() => {
+          setActiveTab('community');
+          setIsMobileMenuOpen(false);
+        }}
+        className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+          activeTab === 'community'
+            ? 'bg-white/10 text-white'
+            : 'text-gray-400 hover:bg-white/5'
+        }`}
+      >
+        <Users size={18} />
+        <span>Community</span>
+      </button>
+      <button
+        onClick={() => {
+          setActiveTab('links');
+          setIsMobileMenuOpen(false);
+        }}
+        className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+          activeTab === 'links'
+            ? 'bg-white/10 text-white'
+            : 'text-gray-400 hover:bg-white/5'
+        }`}
+      >
+        <Link size={18} />
+        <span>Links</span>
+      </button>
     </nav>
   );
 
@@ -203,7 +203,7 @@ function App() {
             <StatsCard
               title="Downloads (48h)"
               value={recent48hDownloads.toLocaleString()}
-              icon={<Clock size={24} />}
+              icon={<LineChart size={24} />}
             />
             <StatsCard
               title="Latest Version"
@@ -234,26 +234,27 @@ function App() {
       case 'community':
         return (
           <div className="space-y-8">
-            <div className="text-center">
+            <div className="text-center mb-8">
               <h2 className="text-4xl font-bold text-white mb-2">SimBA Community Activity</h2>
               <p className="text-lg text-gray-400">Statistics as of {githubStats?.date}</p>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+            <div className="space-y-8">
               <div>
-                <div className="grid grid-cols-1 gap-4">
+                <h3 className="text-xl font-semibold text-white mb-4">GitHub Activity</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
                   <StatsCard
-                    title="GitHub Posts"
+                    title="Total Posts"
                     value={githubStats?.post_cnt ? githubStats.post_cnt.toLocaleString() : '0'}
                     icon={<MessageSquare size={24} />}
                   />
                   <StatsCard
-                    title="GitHub Comments"
+                    title="Total Comments"
                     value={githubStats?.comment_cnt ? githubStats.comment_cnt.toLocaleString() : '0'}
-                    icon={<MessagesSquare size={24} />}
+                    icon={<MessageSquare size={24} />}
                   />
                   <StatsCard
-                    title="GitHub Authors"
+                    title="Active Users"
                     value={githubStats?.post_authors ? githubStats.post_authors.toLocaleString() : '0'}
                     icon={<Users size={24} />}
                   />
@@ -261,24 +262,34 @@ function App() {
               </div>
 
               <div>
-                <div className="grid grid-cols-1 gap-4">
+                <h3 className="text-xl font-semibold text-white mb-4">Gitter Chat Activity</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
                   <StatsCard
-                    title="Gitter Messages"
+                    title="Total Posts"
                     value={gitterStats?.post_cnt ? gitterStats.post_cnt.toLocaleString() : '0'}
                     icon={<MessageSquare size={24} />}
                   />
                   <StatsCard
-                    title="Gitter Users"
+                    title="Average Posts/User"
+                    value={gitterStats?.avg_posts_per_user ? gitterStats.avg_posts_per_user.toFixed(1) : '0'}
+                    icon={<MessageSquare size={24} />}
+                  />
+                  <StatsCard
+                    title="Active Users"
                     value={gitterStats?.unique_users_with_posts ? gitterStats.unique_users_with_posts.toLocaleString() : '0'}
                     icon={<Users size={24} />}
                   />
-                  <StatsCard
-                    title="Avg Posts/User"
-                    value={gitterStats?.avg_posts_per_user ? gitterStats.avg_posts_per_user.toFixed(1) : '0'}
-                    icon={<MessagesSquare size={24} />}
-                  />
                 </div>
               </div>
+
+              {commitStats && (
+                <div>
+                  <h3 className="text-xl font-semibold text-white mb-4">Repository Commits</h3>
+                  <div className="bg-navy-light rounded-lg p-4 lg:p-6">
+                    <CommitChart data={commitStats} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -319,18 +330,6 @@ function App() {
               <div>
                 <h3 className="text-lg font-semibold text-white">Nature Neuroscience</h3>
                 <p className="text-gray-400">Published research paper</p>
-              </div>
-            </a>
-            <a
-              href="https://app.gitter.im/#/room/#SimBA-Resource_community:gitter.im"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-navy-light rounded-lg p-6 flex items-center space-x-4 hover:bg-white/5 transition-colors"
-            >
-              <MessageSquare size={24} className="text-white" />
-              <div>
-                <h3 className="text-lg font-semibold text-white">Gitter Chat</h3>
-                <p className="text-gray-400">Community discussions</p>
               </div>
             </a>
             <a
